@@ -1,13 +1,12 @@
 import select
-import time
 
 from evdev import InputDevice, ecodes, list_devices
+
+from .detector import PressDetector
 
 
 DEVICE_NAME = "HP WMI hotkeys"
 OMEN_KEY = ecodes.KEY_PROG2
-
-DOUBLE_PRESS_WINDOW = 0.40
 
 
 def find_omen_device():
@@ -22,6 +21,7 @@ def find_omen_device():
 
 def listen():
     device = find_omen_device()
+    detector = PressDetector()
 
     print("⚡ OMEN Pulse")
     print(f"Device: {device.name}")
@@ -29,54 +29,30 @@ def listen():
     print(f"Key:    KEY_PROG2 ({OMEN_KEY})")
     print("Listening...\n")
 
-    pending_single = False
-    first_press_time = 0.0
-
     while True:
 
-        timeout = DOUBLE_PRESS_WINDOW
+        readable, _, _ = select.select(
+            [device.fd],
+            [],
+            [],
+            0.05,
+        )
 
-        if pending_single:
-            elapsed = time.monotonic() - first_press_time
-            timeout = max(0, DOUBLE_PRESS_WINDOW - elapsed)
+        if readable:
+            for event in device.read():
 
-        readable, _, _ = select.select([device.fd], [], [], timeout)
+                if event.type != ecodes.EV_KEY:
+                    continue
 
-        # Timeout: no second press arrived
-        if not readable:
-            if pending_single:
-                print("⚡ SINGLE PRESS → 🎬 ENTERTAINMENT MODE")
-                pending_single = False
-                first_press_time = 0.0
+                if event.code != OMEN_KEY:
+                    continue
 
-            continue
+                if event.value != 1:
+                    continue
 
-        for event in device.read():
+                detector.press()
 
-            if event.type != ecodes.EV_KEY:
-                continue
-
-            if event.code != OMEN_KEY:
-                continue
-
-            # Only react to key-down events
-            if event.value != 1:
-                continue
-
-            current_time = time.monotonic()
-
-            if (
-                pending_single
-                and current_time - first_press_time <= DOUBLE_PRESS_WINDOW
-            ):
-                print("⚡ DOUBLE PRESS → 🔨 FOCUS / BUILD MODE")
-
-                pending_single = False
-                first_press_time = 0.0
-
-            else:
-                pending_single = True
-                first_press_time = current_time
+        detector.check_timeout()
 
 
 if __name__ == "__main__":
