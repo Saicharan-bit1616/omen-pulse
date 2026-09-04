@@ -1,6 +1,6 @@
 import time
 
-from .modes import entertainment_mode, focus_mode
+from .manager import ModeManager
 
 
 DOUBLE_PRESS_WINDOW = 0.40
@@ -10,6 +10,7 @@ class PressDetector:
     def __init__(self):
         self.pending_single = False
         self.first_press_time = 0.0
+        self.mode_manager = ModeManager()
 
     def press(self):
         current_time = time.monotonic()
@@ -21,7 +22,7 @@ class PressDetector:
             self.pending_single = False
             self.first_press_time = 0.0
 
-            focus_mode()
+            self.mode_manager.activate("focus")
             return
 
         self.pending_single = True
@@ -35,4 +36,4 @@ class PressDetector:
             self.pending_single = False
             self.first_press_time = 0.0
 
-            entertainment_mode()
+            self.mode_manager.activate("entertainment")
